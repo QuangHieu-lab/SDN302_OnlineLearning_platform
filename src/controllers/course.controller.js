@@ -201,9 +201,7 @@ const getCourseById = async (req, res) => {
       };
       return res.json(courseWithoutContent);
     }
-const currentUser = await prisma.user.findUnique({
-      where: { userId: userId }
-    });
+
     const enrollment = await prisma.enrollment.findUnique({
       where: {
         userId_courseId: {
@@ -212,12 +210,12 @@ const currentUser = await prisma.user.findUnique({
         },
       },
     });
-const isAdmin = currentUser?.role === 'admin' || currentUser?.roles?.includes('admin');
+
     const isEnrolled = !!enrollment;
     const isInstructor = course.instructorId === userId;
     const isPaidCourse = Number(course.price) > 0;
 
-    if (isPaidCourse && !isEnrolled && !isInstructor && !isAdmin) {
+    if (isPaidCourse && !isEnrolled && !isInstructor) {
       const courseWithoutContent = {
         ...course,
         modules: course.modules.map((module) => ({
@@ -231,7 +229,7 @@ const isAdmin = currentUser?.role === 'admin' || currentUser?.roles?.includes('a
 
     res.json({
       ...course,
-      isEnrolled: isEnrolled || isInstructor || isAdmin,
+      isEnrolled: isEnrolled || isInstructor,
     });
   } catch (error) {
     console.error('Get course error:', error);
