@@ -201,7 +201,9 @@ const getCourseById = async (req, res) => {
       };
       return res.json(courseWithoutContent);
     }
-
+const currentUser = await prisma.user.findUnique({
+      where: { userId: userId }
+    });
     const enrollment = await prisma.enrollment.findUnique({
       where: {
         userId_courseId: {
