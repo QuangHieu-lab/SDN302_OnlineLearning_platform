@@ -140,6 +140,8 @@ const getCourseById = async (req, res) => {
   try {
     const { courseId } = req.params;
     const userId = req.userId;
+    const roles = req.userRoles || [];
+    const isAdmin = roles.includes('admin');
 
     const access = await ensureCourseAccess(courseId, userId);
     if (access.error) {
@@ -215,7 +217,7 @@ const getCourseById = async (req, res) => {
     const isInstructor = course.instructorId === userId;
     const isPaidCourse = Number(course.price) > 0;
 
-    if (isPaidCourse && !isEnrolled && !isInstructor) {
+    if (isPaidCourse && !isEnrolled && !isInstructor && !isAdmin) {
       const courseWithoutContent = {
         ...course,
         modules: course.modules.map((module) => ({
@@ -229,7 +231,7 @@ const getCourseById = async (req, res) => {
 
     res.json({
       ...course,
-      isEnrolled: isEnrolled || isInstructor,
+      isEnrolled: isEnrolled || isInstructor || isAdmin,
     });
   } catch (error) {
     console.error('Get course error:', error);
