@@ -27,6 +27,9 @@ const getAllUsers = async (req, res) => {
       userId: user.userId,
       email: user.email,
       fullName: user.fullName,
+      phoneNumber: user.phoneNumber,
+      currentLevel: user.currentLevel,
+      isActive: user.isActive,
       roles: user.userRoles.map((ur) => ur.role.roleName),
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
@@ -93,6 +96,9 @@ const getUserById = async (req, res) => {
       userId: user.userId,
       email: user.email,
       fullName: user.fullName,
+      phoneNumber: user.phoneNumber,
+      currentLevel: user.currentLevel,
+      isActive: user.isActive,  
       roles: user.userRoles.map((ur) => ur.role.roleName),
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
@@ -110,7 +116,7 @@ const updateUser = async (req, res) => {
   try {
     const { userId } = req.params;
     const userIdInt = parseInt(userId);
-    const { name, email, roles, password } = req.body;
+   const { name, email, roles, password, isActive, phoneNumber, currentLevel } = req.body;
 
     if (isNaN(userIdInt)) {
       return res.status(400).json({ error: 'Invalid user ID' });
@@ -122,7 +128,9 @@ const updateUser = async (req, res) => {
     if (password) {
       updateData.passwordHash = await bcrypt.hash(password, 10);
     }
-
+    if (typeof isActive === 'boolean') updatedData.isActive = isActive;
+  if (phoneNumber !== undefined) updatedData.phoneNumber = phoneNumber || null;
+  if (currentLevel) updatedData.currentLevel = currentLevel;  
     if (roles && Array.isArray(roles)) {
       await prisma.userRole.deleteMany({
         where: { userId: userIdInt },

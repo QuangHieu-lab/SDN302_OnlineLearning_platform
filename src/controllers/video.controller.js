@@ -91,7 +91,7 @@ const uploadVideo = async (req, res) => {
     const isBucketNotFound =
       typeof responseMsg === 'string' && responseMsg.toLowerCase().includes('bucket does not exist');
     const isFirebaseUnavailable = msg.includes('Firebase') || isBucketNotFound;
-    const status = isFirebaseUnavailable ? 503 : 500;
+const status = isFirebaseUnavailable ? 503 : 500;
     const message = isBucketNotFound
       ? 'Storage bucket not found. Enable Firebase Storage and set FIREBASE_STORAGE_BUCKET in .env'
       : isFirebaseUnavailable
@@ -178,7 +178,7 @@ const getVideo = async (req, res) => {
 const streamVideo = async (req, res) => {
   try {
     const { videoId } = req.params;
-    const resourceIdInt = parseInt(videoId);
+const resourceIdInt = parseInt(videoId);
     const userId = req.userId;
 
     if (isNaN(resourceIdInt)) {
@@ -272,7 +272,7 @@ const deleteVideo = async (req, res) => {
       const localMatch = fileUrl.match(/\/uploads\/([^/?]+)$/);
       if (localMatch) {
         const uploadsDir = path.join(__dirname, '../../uploads');
-        const filePath = path.join(uploadsDir, localMatch[1]);
+const filePath = path.join(uploadsDir, localMatch[1]);
         if (fs.existsSync(filePath)) {
           fs.unlinkSync(filePath);
         }
