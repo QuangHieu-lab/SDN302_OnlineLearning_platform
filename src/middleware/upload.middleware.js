@@ -63,4 +63,29 @@ const uploadResource = multer({
   limits: { fileSize: RESOURCE_MAX_BYTES },
 });
 
-module.exports = { uploadVideo, uploadResource };
+// Thumbnails (course cover images)
+const thumbnailsDir = path.join(__dirname, '../../uploads/thumbnails');
+if (!fs.existsSync(thumbnailsDir)) {
+  fs.mkdirSync(thumbnailsDir, { recursive: true });
+}
+const thumbnailStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, thumbnailsDir),
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname || '').toLowerCase() || '.jpg';
+    cb(null, uniqueSuffix + ext);
+  },
+});
+const thumbnailFileFilter = (req, file, cb) => {
+  const allowed = /^image\/(jpeg|jpg|png|gif|webp)$/;
+  if (file.mimetype && allowed.test(file.mimetype)) return cb(null, true);
+  cb(new Error('Only image files (JPEG, PNG, GIF, WebP) are allowed'));
+};
+const THUMBNAIL_MAX_BYTES = 5 * 1024 * 1024; // 5MB
+const uploadThumbnail = multer({
+  storage: thumbnailStorage,
+  fileFilter: thumbnailFileFilter,
+  limits: { fileSize: THUMBNAIL_MAX_BYTES },
+});
+
+module.exports = { uploadVideo, uploadResource, uploadThumbnail };

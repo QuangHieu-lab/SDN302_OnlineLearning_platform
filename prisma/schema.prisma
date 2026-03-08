@@ -37,11 +37,8 @@ enum CourseCategory {
 }
 
 enum CourseStatus {
-  draft
-  pending_review
-  approved_upload
+  in_progress
   published
-  rejected
   archived
 }
 
@@ -137,6 +134,7 @@ model User {
   userRoles           UserRole[]
   instructorProfile   InstructorProfile?
   coursesAsInstructor Course[]           @relation("CourseInstructor")
+  coursesFlagged      Course[]           @relation("CourseFlaggedBy")
   enrollments         Enrollment[]
   carts               Cart[]
   orders              Order[]
@@ -217,19 +215,24 @@ model Course {
   priceJustification String?        @map("price_justification") @db.Text
   price              Decimal        @default(0.00) @db.Decimal(10, 2)
   adminNote          String?        @map("admin_note") @db.Text
-  status             CourseStatus   @default(draft)
+  status             CourseStatus   @default(in_progress)
   oldPrice           Decimal?       @map("old_price") @db.Decimal(10, 2)
   thumbnailUrl       String?        @map("thumbnail_url")
   previewVideoUrl    String?        @map("preview_video_url")
   totalStudents      Int            @default(0) @map("total_students")
   totalReviews       Int            @default(0) @map("total_reviews")
   avgRating          Decimal        @default(0.00) @map("avg_rating") @db.Decimal(3, 2)
+  contentFlagged     Boolean        @default(false) @map("content_flagged")
+  contentFlaggedAt   DateTime?      @map("content_flagged_at")
+  contentFlaggedBy   Int?           @map("content_flagged_by")
+  contentFlaggedReason String?      @db.Text @map("content_flagged_reason")
   createdAt          DateTime       @default(now()) @map("created_at")
   updatedAt          DateTime       @updatedAt @map("updated_at")
   
 
   // Relations
-  instructor    User           @relation("CourseInstructor", fields: [instructorId], references: [userId])
+  instructor       User           @relation("CourseInstructor", fields: [instructorId], references: [userId])
+  flaggedByUser    User?          @relation("CourseFlaggedBy", fields: [contentFlaggedBy], references: [userId], onDelete: SetNull)
   modules       Module[]
   enrollments   Enrollment[]
   carts         Cart[]

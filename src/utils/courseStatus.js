@@ -7,11 +7,8 @@
  * Valid status transitions
  */
 const VALID_TRANSITIONS = {
-  draft: ['pending_review'],
-  pending_review: ['published', 'rejected'],
-  approved_upload: ['published'],
-  rejected: ['draft'],
-  published: [], // Published courses cannot transition (final state)
+  in_progress: ['published'],
+  published: ['archived'],
   archived: [], // Archived courses cannot transition (final state)
 };
 
@@ -40,8 +37,8 @@ const canSubmit = (course) => {
     return { canSubmit: false, reason: 'Course not found' };
   }
 
-  if (course.status !== 'draft') {
-    return { canSubmit: false, reason: 'Only draft courses can be submitted for review' };
+  if (course.status !== 'in_progress') {
+    return { canSubmit: false, reason: 'Only in-progress courses can be published' };
   }
 
   // Check if course has at least one module

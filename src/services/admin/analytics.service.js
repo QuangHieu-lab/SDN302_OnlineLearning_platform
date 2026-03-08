@@ -42,9 +42,9 @@ async function getStatsSummary() {
       where: { status: 'published' },
     }),
     
-    // Pending review courses
+    // In-progress courses (not yet published)
     prisma.course.count({
-      where: { status: 'pending_review' },
+      where: { status: 'in_progress' },
     }),
     
     // Total enrollments

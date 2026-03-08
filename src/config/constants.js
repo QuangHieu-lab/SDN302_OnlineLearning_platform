@@ -37,7 +37,7 @@ const GRADE_B_MIN = 80;
 // Allowed values for validation (match Prisma enums)
 const COURSE_CATEGORIES = ['IELTS', 'TOEIC', 'Communication', 'Grammar', 'Business', 'Kids'];
 const USER_LEVELS = ['A0', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
-const COURSE_STATUSES = ['draft', 'pending_review', 'approved_upload', 'published', 'rejected', 'archived'];
+const COURSE_STATUSES = ['in_progress', 'published', 'archived'];
 
 function getJwtSecret() {
   return process.env.JWT_SECRET || 'secret';

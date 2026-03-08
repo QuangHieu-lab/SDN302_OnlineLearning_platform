@@ -1,8 +1,10 @@
+const path = require('path');
 const prisma = require('../utils/prisma');
 const { isValidStatusTransition, canSubmit } = require('../utils/courseStatus');
 const { ensureCourseAccess, getCourseForInstructor, sendAccessError } = require('../utils/access.helpers');
 const { mapPrismaError } = require('../utils/error.utils');
 const { DEFAULT_COURSE_CATEGORY, DEFAULT_COURSE_LEVEL_TARGET, ENROLLMENT_STATUS_ACTIVE, COURSE_CATEGORIES, USER_LEVELS, COURSE_STATUSES } = require('../config/constants');
+const { uploadFileToFirebase } = require('../services/firebase-storage.service');
 
 const createCourse = async (req, res) => {
   try {
@@ -91,6 +93,13 @@ const getCourses = async (req, res) => {
           return res.status(400).json({ error: `Invalid status. Must be one of: ${COURSE_STATUSES.join(', ')}` });
         }
         whereClause.status = status;
+      }
+      // Public listing: only published and not content-flagged, unless user is admin
+      const roles = req.userRoles || [];
+      const isAdmin = Array.isArray(roles) && roles.includes('admin');
+      if (!status && !isAdmin) {
+        whereClause.status = 'published';
+        whereClause.contentFlagged = false;
       }
 
       courses = await prisma.course.findMany({
@@ -242,7 +251,7 @@ const getCourseById = async (req, res) => {
 const updateCourse = async (req, res) => {
   try {
     const { courseId } = req.params;
-    const { title, description } = req.body;
+    const { title, description, thumbnailUrl } = req.body;
     const userId = req.userId;
 
     const access = await getCourseForInstructor(courseId, userId);
@@ -251,12 +260,14 @@ const updateCourse = async (req, res) => {
     }
     const courseIdInt = access.course.courseId;
 
+    const data = { title, description };
+    if (thumbnailUrl !== undefined) {
+      data.thumbnailUrl = thumbnailUrl === '' || thumbnailUrl == null ? null : thumbnailUrl;
+    }
+
     const updatedCourse = await prisma.course.update({
       where: { courseId: courseIdInt },
-      data: {
-        title,
-        description,
-      },
+      data,
       include: {
         instructor: {
           select: {
@@ -549,16 +560,16 @@ const submitCourseForReview = async (req, res) => {
     }
 
     // Validate status transition
-    if (!isValidStatusTransition(course.status, 'pending_review')) {
-      return res.status(400).json({ 
-        error: `Cannot submit course. Current status: ${course.status}. Only draft courses can be submitted.` 
+    if (!isValidStatusTransition(course.status, 'published')) {
+      return res.status(400).json({
+        error: `Cannot submit course. Current status: ${course.status}. Only in-progress courses can be published.`,
       });
     }
 
     const updatedCourse = await prisma.course.update({
       where: { courseId: courseIdInt },
       data: {
-        status: 'pending_review',
+        status: 'published',
       },
       include: {
         instructor: {
@@ -585,6 +596,66 @@ const submitCourseForReview = async (req, res) => {
   }
 };
 
+// Publish course directly (instructor, draft -> published)
+const publishCourse = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const userId = req.userId;
+
+    const access = await getCourseForInstructor(courseId, userId, {
+      include: {
+        modules: {
+          include: {
+            lessons: true,
+          },
+        },
+      },
+    });
+    if (access.error) {
+      return sendAccessError(res, access.error);
+    }
+    const course = access.course;
+    const courseIdInt = course.courseId;
+
+    const submissionCheck = canSubmit(course);
+    if (!submissionCheck.canSubmit) {
+      return res.status(400).json({ error: submissionCheck.reason });
+    }
+
+    if (!isValidStatusTransition(course.status, 'published')) {
+      return res.status(400).json({
+        error: `Cannot publish course. Current status: ${course.status}. Only in-progress courses can be published.`,
+      });
+    }
+
+    const updatedCourse = await prisma.course.update({
+      where: { courseId: courseIdInt },
+      data: { status: 'published' },
+      include: {
+        instructor: {
+          select: {
+            userId: true,
+            fullName: true,
+            email: true,
+          },
+        },
+        modules: {
+          include: {
+            _count: {
+              select: { lessons: true },
+            },
+          },
+        },
+      },
+    });
+
+    res.json(updatedCourse);
+  } catch (error) {
+    console.error('Publish course error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 // Approve course
 const approveCourse = async (req, res) => {
   try {
@@ -597,10 +668,10 @@ const approveCourse = async (req, res) => {
     const course = access.course;
     const courseIdInt = course.courseId;
 
-    // Validate status transition
+    // Validate status transition (legacy: approve in_progress -> published if needed)
     if (!isValidStatusTransition(course.status, 'published')) {
-      return res.status(400).json({ 
-        error: `Cannot approve course. Current status: ${course.status}. Only pending_review courses can be approved.` 
+      return res.status(400).json({
+        error: `Cannot approve course. Current status: ${course.status}. Only in-progress courses can be approved.`,
       });
     }
 
@@ -652,38 +723,10 @@ const rejectCourse = async (req, res) => {
     const course = access.course;
     const courseIdInt = course.courseId;
 
-    // Validate status transition
-    if (!isValidStatusTransition(course.status, 'rejected')) {
-      return res.status(400).json({ 
-        error: `Cannot reject course. Current status: ${course.status}. Only pending_review courses can be rejected.` 
-      });
-    }
-
-    const updatedCourse = await prisma.course.update({
-      where: { courseId: courseIdInt },
-      data: {
-        status: 'rejected',
-        adminNote: adminNote.trim(),
-      },
-      include: {
-        instructor: {
-          select: {
-            userId: true,
-            fullName: true,
-            email: true,
-          },
-        },
-        modules: {
-          include: {
-            _count: {
-              select: { lessons: true },
-            },
-          },
-        },
-      },
+    // Legacy: reject deprecated (instructor publishes directly; admin uses flag)
+    return res.status(400).json({
+      error: 'Reject is deprecated. Use "Flag inappropriate content" if needed.',
     });
-
-    res.json(updatedCourse);
   } catch (error) {
     console.error('Reject course error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -703,17 +746,17 @@ const reviseCourse = async (req, res) => {
     const course = access.course;
     const courseIdInt = course.courseId;
 
-    // Validate status transition
-    if (!isValidStatusTransition(course.status, 'draft')) {
-      return res.status(400).json({ 
-        error: `Cannot revise course. Current status: ${course.status}. Only rejected courses can be revised.` 
+    // Legacy: revise (revert to in_progress)
+    if (!['published', 'in_progress'].includes(course.status)) {
+      return res.status(400).json({
+        error: `Cannot revise course. Current status: ${course.status}.`,
       });
     }
 
     const updatedCourse = await prisma.course.update({
       where: { courseId: courseIdInt },
       data: {
-        status: 'draft',
+        status: 'in_progress',
         adminNote: null,
       },
       include: {
@@ -741,12 +784,101 @@ const reviseCourse = async (req, res) => {
   }
 };
 
+// Flag course content as inappropriate (admin only)
+const flagCourseContent = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const { reason } = req.body || {};
+
+    const access = await ensureCourseAccess(courseId, req.userId);
+    if (access.error) {
+      return sendAccessError(res, access.error);
+    }
+    const courseIdInt = access.course.courseId;
+
+    const updatedCourse = await prisma.course.update({
+      where: { courseId: courseIdInt },
+      data: {
+        contentFlagged: true,
+        contentFlaggedAt: new Date(),
+        contentFlaggedBy: req.userId,
+        contentFlaggedReason: reason && typeof reason === 'string' ? reason.trim() || null : null,
+      },
+      include: {
+        instructor: {
+          select: {
+            userId: true,
+            fullName: true,
+            email: true,
+          },
+        },
+        modules: {
+          include: {
+            _count: {
+              select: { lessons: true },
+            },
+          },
+        },
+      },
+    });
+
+    res.json(updatedCourse);
+  } catch (error) {
+    console.error('Flag course error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+// Unflag course content (admin only)
+const unflagCourseContent = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+
+    const access = await ensureCourseAccess(courseId, req.userId);
+    if (access.error) {
+      return sendAccessError(res, access.error);
+    }
+    const courseIdInt = access.course.courseId;
+
+    const updatedCourse = await prisma.course.update({
+      where: { courseId: courseIdInt },
+      data: {
+        contentFlagged: false,
+        contentFlaggedAt: null,
+        contentFlaggedBy: null,
+        contentFlaggedReason: null,
+      },
+      include: {
+        instructor: {
+          select: {
+            userId: true,
+            fullName: true,
+            email: true,
+          },
+        },
+        modules: {
+          include: {
+            _count: {
+              select: { lessons: true },
+            },
+          },
+        },
+      },
+    });
+
+    res.json(updatedCourse);
+  } catch (error) {
+    console.error('Unflag course error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 // Get pending courses (admin only)
 const getPendingCourses = async (req, res) => {
   try {
     const courses = await prisma.course.findMany({
       where: {
-        status: 'pending_review',
+        status: 'in_progress',
       },
       include: {
         instructor: {
@@ -836,6 +968,60 @@ const getInstructorCourses = async (req, res) => {
   }
 };
 
+// Upload course thumbnail (instructor only)
+const uploadCourseThumbnail = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const userId = req.userId;
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No thumbnail file uploaded' });
+    }
+
+    const access = await getCourseForInstructor(courseId, userId);
+    if (access.error) {
+      return sendAccessError(res, access.error);
+    }
+    const courseIdInt = access.course.courseId;
+
+    const useLocalStorage = process.env.USE_LOCAL_VIDEO_STORAGE === 'true';
+    let thumbnailUrl;
+
+    if (useLocalStorage) {
+      const baseUrl = process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`;
+      thumbnailUrl = `${baseUrl.replace(/\/$/, '')}/uploads/thumbnails/${req.file.filename}`;
+    } else {
+      try {
+        const uploadResult = await uploadFileToFirebase(req.file, 'thumbnails');
+        thumbnailUrl = uploadResult.url;
+      } catch (uploadErr) {
+        console.error('Thumbnail upload error:', uploadErr);
+        return res.status(502).json({ error: 'Failed to upload thumbnail' });
+      }
+    }
+
+    const updatedCourse = await prisma.course.update({
+      where: { courseId: courseIdInt },
+      data: { thumbnailUrl },
+      include: {
+        instructor: {
+          select: {
+            userId: true,
+            fullName: true,
+            email: true,
+          },
+        },
+        modules: true,
+      },
+    });
+
+    res.json(updatedCourse);
+  } catch (error) {
+    console.error('Upload course thumbnail error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 module.exports = {
   createCourse,
   getCourses,
@@ -847,9 +1033,13 @@ module.exports = {
   enrollInCourse,
   getCoursesByStudentId,
   submitCourseForReview,
+  publishCourse,
   approveCourse,
   rejectCourse,
   reviseCourse,
+  flagCourseContent,
+  unflagCourseContent,
   getPendingCourses,
   getInstructorCourses,
+  uploadCourseThumbnail,
 };
