@@ -15,6 +15,7 @@ router.post("/lessons/:lessonId", authenticate, updateProgress);
 router.post("/lessons/:lessonId/start", authenticate, markLessonStarted);
 router.post('/lessons/:lessonId/viewed', authenticate, markLessonViewed);
 router.post('/lessons/:lessonId/video', authenticate, updateLessonVideoProgress);
+router.post('/resources/:resourceId/viewed', authenticate, markResourceViewed);
 router.get("/courses/:courseId", authenticate, getProgress);
 router.get("/user", authenticate, getUserProgress);
 

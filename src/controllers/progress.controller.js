@@ -1,8 +1,14 @@
-const prisma = require('../utils/prisma');
-const { ensureCertificateIssuedIfEligible } = require('./certificate.controller');
-const { mapPrismaError } = require('../utils/error.utils');
-const { PROGRESS_STATUS_COMPLETED, PROGRESS_STATUS_IN_PROGRESS, PROGRESS_STATUS_NOT_STARTED } = require('../config/constants');
-const { computeCourseProgress } = require('../utils/progress.utils');
+const prisma = require("../utils/prisma");
+const {
+  ensureCertificateIssuedIfEligible,
+} = require("./certificate.controller");
+const { mapPrismaError } = require("../utils/error.utils");
+const {
+  PROGRESS_STATUS_COMPLETED,
+  PROGRESS_STATUS_IN_PROGRESS,
+  PROGRESS_STATUS_NOT_STARTED,
+} = require("../config/constants");
+const { computeCourseProgress } = require("../utils/progress.utils");
 
 const updateProgress = async (req, res) => {
   try {
@@ -12,7 +18,7 @@ const updateProgress = async (req, res) => {
     const lessonIdInt = parseInt(lessonId);
 
     if (isNaN(lessonIdInt)) {
-      return res.status(400).json({ error: 'Invalid lesson ID' });
+      return res.status(400).json({ error: "Invalid lesson ID" });
     }
 
     const lesson = await prisma.lesson.findUnique({
@@ -27,7 +33,7 @@ const updateProgress = async (req, res) => {
     });
 
     if (!lesson) {
-      return res.status(404).json({ error: 'Lesson not found' });
+      return res.status(404).json({ error: "Lesson not found" });
     }
 
     const enrollment = await prisma.enrollment.findUnique({
@@ -40,13 +46,18 @@ const updateProgress = async (req, res) => {
     });
 
     if (!enrollment) {
-      return res.status(403).json({ error: 'You must be enrolled in this course to track progress' });
+      return res.status(403).json({
+        error: "You must be enrolled in this course to track progress",
+      });
     }
 
     let progressStatus = PROGRESS_STATUS_NOT_STARTED;
     if (status === PROGRESS_STATUS_COMPLETED || status === true) {
       progressStatus = PROGRESS_STATUS_COMPLETED;
-    } else if (status === PROGRESS_STATUS_IN_PROGRESS || lastWatchedSecond > 0) {
+    } else if (
+      status === PROGRESS_STATUS_IN_PROGRESS ||
+      lastWatchedSecond > 0
+    ) {
       progressStatus = PROGRESS_STATUS_IN_PROGRESS;
     }
 
@@ -60,24 +71,26 @@ const updateProgress = async (req, res) => {
       update: {
         status: progressStatus,
         lastWatchedSecond: lastWatchedSecond || undefined,
-        completedAt: progressStatus === PROGRESS_STATUS_COMPLETED ? new Date() : undefined,
+        completedAt:
+          progressStatus === PROGRESS_STATUS_COMPLETED ? new Date() : undefined,
       },
       create: {
         enrollmentId: enrollment.enrollmentId,
         lessonId: lessonIdInt,
         status: progressStatus,
         lastWatchedSecond: lastWatchedSecond || 0,
-        completedAt: progressStatus === PROGRESS_STATUS_COMPLETED ? new Date() : null,
+        completedAt:
+          progressStatus === PROGRESS_STATUS_COMPLETED ? new Date() : null,
       },
     });
-let certificate = null;
+    let certificate = null;
 
     // Chỉ kiểm tra khi user đã hoàn thành bài học này
     if (progressStatus === PROGRESS_STATUS_COMPLETED) {
       try {
         certificate = await ensureCertificateIssuedIfEligible(
           userId,
-          lesson.module.course.courseId
+          lesson.module.course.courseId,
         );
       } catch (certError) {
         console.error("Auto-issue certificate failed:", certError);
@@ -90,11 +103,11 @@ let certificate = null;
     res.json({
       ...learningProgress,
       certificateEarned: !!certificate, // true nếu vừa nhận được bằng
-      certificateData: certificate      // Dữ liệu bằng để hiển thị popup
+      certificateData: certificate, // Dữ liệu bằng để hiển thị popup
     });
   } catch (error) {
-    console.error('Update progress error:', error);
-    if (error.code === 'P2002') {
+    console.error("Update progress error:", error);
+    if (error.code === "P2002") {
       const lessonIdInt = parseInt(req.params.lessonId);
       const lesson = await prisma.lesson.findUnique({
         where: { lessonId: lessonIdInt },
@@ -124,9 +137,12 @@ let certificate = null;
               },
             },
             data: {
-              status: req.body.status || 'in_progress',
+              status: req.body.status || "in_progress",
               lastWatchedSecond: req.body.lastWatchedSecond || undefined,
-              completedAt: req.body.status === PROGRESS_STATUS_COMPLETED ? new Date() : undefined,
+              completedAt:
+                req.body.status === PROGRESS_STATUS_COMPLETED
+                  ? new Date()
+                  : undefined,
             },
           });
           return res.json(learningProgress);
@@ -145,7 +161,7 @@ const getProgress = async (req, res) => {
     const userId = req.userId;
 
     if (isNaN(courseIdInt)) {
-      return res.status(400).json({ error: 'Invalid course ID' });
+      return res.status(400).json({ error: "Invalid course ID" });
     }
 
     const enrollment = await prisma.enrollment.findUnique({
@@ -158,7 +174,9 @@ const getProgress = async (req, res) => {
     });
 
     if (!enrollment) {
-      return res.status(403).json({ error: 'You must be enrolled in this course' });
+      return res
+        .status(403)
+        .json({ error: "You must be enrolled in this course" });
     }
 
     const course = await prisma.course.findUnique({
@@ -173,11 +191,11 @@ const getProgress = async (req, res) => {
     });
 
     if (!course) {
-      return res.status(404).json({ error: 'Course not found' });
+      return res.status(404).json({ error: "Course not found" });
     }
 
     const allLessonIds = course.modules.flatMap((module) =>
-      module.lessons.map((lesson) => lesson.lessonId)
+      module.lessons.map((lesson) => lesson.lessonId),
     );
 
     const progressRecords = await prisma.learningProgress.findMany({
@@ -190,8 +208,15 @@ const getProgress = async (req, res) => {
     });
 
     const progressMap = new Map(progressRecords.map((p) => [p.lessonId, p]));
-    const enrollmentWithProgress = { ...enrollment, learningProgress: progressRecords };
-    const { completedCount: completedLessons, total: totalLessons, percent: percentage } = computeCourseProgress(enrollmentWithProgress, course);
+    const enrollmentWithProgress = {
+      ...enrollment,
+      learningProgress: progressRecords,
+    };
+    const {
+      completedCount: completedLessons,
+      total: totalLessons,
+      percent: percentage,
+    } = computeCourseProgress(enrollmentWithProgress, course);
 
     const progress = {
       courseId: course.courseId,
@@ -218,8 +243,8 @@ const getProgress = async (req, res) => {
 
     res.json(progress);
   } catch (error) {
-    console.error('Get progress error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error("Get progress error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 };
 
@@ -245,7 +270,11 @@ const getUserProgress = async (req, res) => {
 
     const progress = enrollments.map((enrollment) => {
       const course = enrollment.course;
-      const { completedCount: completedLessons, total: totalLessons, percent: percentage } = computeCourseProgress(enrollment, course);
+      const {
+        completedCount: completedLessons,
+        total: totalLessons,
+        percent: percentage,
+      } = computeCourseProgress(enrollment, course);
       return {
         courseId: course.courseId,
         courseTitle: course.title,
@@ -258,8 +287,100 @@ const getUserProgress = async (req, res) => {
 
     res.json(progress);
   } catch (error) {
-    console.error('Get user progress error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error("Get user progress error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+const markLessonStarted = async (req, res) => {
+  try {
+    const result = await markLessonStartedInternal(
+      req.userId,
+      req.params.lessonId,
+    );
+    if (result.error) {
+      return res
+        .status(result.error.status)
+        .json({ error: result.error.message });
+    }
+    return res.json({
+      ...(result.learningProgress || {}),
+      courseProgress: result.snapshot,
+    });
+  } catch (error) {
+    console.error("Mark lesson started error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+const markLessonViewed = async (req, res) => {
+  try {
+    const result = await markLessonViewedInternal(
+      req.userId,
+      req.params.lessonId,
+    );
+    if (result.error) {
+      return res
+        .status(result.error.status)
+        .json({ error: result.error.message });
+    }
+    return res.json({
+      ...(result.learningProgress || {}),
+      certificateEarned: !!result.certificate,
+      certificateData: result.certificate,
+      courseProgress: result.snapshot,
+    });
+  } catch (error) {
+    console.error("Mark lesson viewed error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+const updateLessonVideoProgress = async (req, res) => {
+  try {
+    const result = await updateLessonVideoProgressInternal(
+      req.userId,
+      req.params.lessonId,
+      req.body || {},
+    );
+    if (result.error) {
+      return res
+        .status(result.error.status)
+        .json({ error: result.error.message });
+    }
+    return res.json({
+      ...(result.learningProgress || {}),
+      certificateEarned: !!result.certificate,
+      certificateData: result.certificate,
+      courseProgress: result.snapshot,
+    });
+  } catch (error) {
+    console.error("Update lesson video progress error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+const markResourceViewed = async (req, res) => {
+  try {
+    const result = await markResourceViewedInternal(
+      req.userId,
+      req.params.resourceId,
+    );
+    if (result.error) {
+      return res
+        .status(result.error.status)
+        .json({ error: result.error.message });
+    }
+    return res.json({
+      resourceId: result.resourceIdInt,
+      lessonId: result.resource.lessonId,
+      courseProgress: result.snapshot,
+      certificateEarned: !!result.certificate,
+      certificateData: result.certificate,
+    });
+  } catch (error) {
+    console.error("Mark resource viewed error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 };
 
@@ -267,4 +388,8 @@ module.exports = {
   updateProgress,
   getProgress,
   getUserProgress,
+  markLessonStarted,
+  markLessonViewed,
+  updateLessonVideoProgress,
+  markResourceViewed,
 };
