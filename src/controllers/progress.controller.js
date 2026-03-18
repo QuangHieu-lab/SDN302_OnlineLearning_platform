@@ -383,6 +383,30 @@ const markResourceViewed = async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 };
+const updateResourceVideoProgress = async (req, res) => {
+  try {
+    const result = await updateResourceVideoProgressInternal(
+      req.userId,
+      req.params.resourceId,
+      req.body || {},
+    );
+    if (result.error) {
+      return res
+        .status(result.error.status)
+        .json({ error: result.error.message });
+    }
+    return res.json({
+      resourceId: result.resourceIdInt,
+      lessonId: result.resource.lessonId,
+      courseProgress: result.snapshot,
+      certificateEarned: !!result.certificate,
+      certificateData: result.certificate,
+    });
+  } catch (error) {
+    console.error("Update resource video progress error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
 
 module.exports = {
   updateProgress,
@@ -392,4 +416,5 @@ module.exports = {
   markLessonViewed,
   updateLessonVideoProgress,
   markResourceViewed,
+  updateResourceVideoProgress,
 };
