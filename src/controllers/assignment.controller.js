@@ -212,8 +212,95 @@ async function listLessonSubmissions(req, res) {
     return res.status(500).json({ error: "Internal server error" });
   }
 }
+
+async function gradeSubmission(req, res) {
+  try {
+    const { submissionId } = req.params;
+    const { grade, feedback } = req.body;
+    const userId = req.userId;
+    const submissionIdInt = toInt(submissionId);
+
+    if (Number.isNaN(submissionIdInt)) {
+      return res.status(400).json({ error: "Invalid submission ID" });
+    }
+
+    if (grade === undefined || grade === null || Number.isNaN(Number(grade))) {
+      return res.status(400).json({ error: "A numeric grade is required" });
+    }
+
+    const submission = await prisma.assignmentSubmission.findUnique({
+      where: { submissionId: submissionIdInt },
+      include: {
+        assignment: {
+          include: {
+            lesson: {
+              include: {
+                module: {
+                  include: {
+                    course: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        enrollment: {
+          include: {
+            user: {
+              select: {
+                userId: true,
+                fullName: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!submission) {
+      return res.status(404).json({ error: "Submission not found" });
+    }
+
+    if (
+      submission.assignment.lesson.module.course.instructorId !== toInt(userId)
+    ) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+
+    const updatedSubmission = await prisma.assignmentSubmission.update({
+      where: { submissionId: submissionIdInt },
+      data: {
+        grade: Number(grade),
+        feedback: String(feedback || "").trim() || null,
+      },
+      include: {
+        enrollment: {
+          include: {
+            user: {
+              select: {
+                userId: true,
+                fullName: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return res.json({
+      message: "Submission graded successfully",
+      submission: mapSubmission(updatedSubmission),
+    });
+  } catch (error) {
+    console.error("Grade assignment submission error:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+}
 module.exports = {
   getAssignmentByLesson,
   submitAssignment,
   listLessonSubmissions,
+  gradeSubmission,
 };
