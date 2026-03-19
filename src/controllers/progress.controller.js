@@ -408,6 +408,99 @@ const updateResourceVideoProgress = async (req, res) => {
   }
 };
 
+const getInstructorCourseStudentsProgress = async (req, res) => {
+  try {
+    const courseIdInt = toInt(req.params.courseId);
+    if (Number.isNaN(courseIdInt)) {
+      return res.status(400).json({ error: "Invalid course ID" });
+    }
+
+    const access = await getCourseForInstructor(courseIdInt, req.userId);
+    if (access.error) {
+      return res
+        .status(access.error.status)
+        .json({ error: access.error.message });
+    }
+
+    const enrollments = await prisma.enrollment.findMany({
+      where: {
+        courseId: courseIdInt,
+        status: {
+          in: [ENROLLMENT_STATUS_ACTIVE, ENROLLMENT_STATUS_COMPLETED],
+        },
+      },
+      include: {
+        user: {
+          select: {
+            userId: true,
+            fullName: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: { enrolledAt: "desc" },
+    });
+
+    const students = await Promise.all(
+      enrollments.map(async (enrollment) => {
+        const snapshot = await loadCourseProgressSnapshot(
+          enrollment,
+          courseIdInt,
+        );
+        const completedLessonDates = snapshot
+          ? snapshot.modules
+              .flatMap((module) => module.lessons)
+              .map((lesson) => lesson.completedAt)
+              .filter(Boolean)
+          : [];
+        const courseCompletedAt =
+          snapshot &&
+          Number(snapshot.percentage) >= 100 &&
+          completedLessonDates.length > 0
+            ? new Date(
+                Math.max(
+                  ...completedLessonDates.map((value) =>
+                    new Date(value).getTime(),
+                  ),
+                ),
+              )
+            : null;
+        const completionDurationMs =
+          courseCompletedAt && enrollment.enrolledAt
+            ? courseCompletedAt.getTime() -
+              new Date(enrollment.enrolledAt).getTime()
+            : null;
+
+        return snapshot
+          ? {
+              student: enrollment.user,
+              enrollmentId: enrollment.enrollmentId,
+              enrolledAt: enrollment.enrolledAt,
+              enrollmentStatus: enrollment.status,
+              courseCompletedAt,
+              completionDurationMs,
+              progressPercent: snapshot.percentage,
+              completedLessons: snapshot.completedLessons,
+              totalLessons: snapshot.totalLessons,
+              currentModule: snapshot.currentModule,
+              currentLesson: snapshot.currentLesson,
+              modules: snapshot.modules,
+            }
+          : null;
+      }),
+    );
+
+    res.json({
+      courseId: courseIdInt,
+      courseTitle: access.course.title,
+      students: students.filter(Boolean),
+    });
+  } catch (error) {
+    console.error("Get instructor course students progress error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
 module.exports = {
   updateProgress,
   getProgress,
@@ -417,4 +510,5 @@ module.exports = {
   updateLessonVideoProgress,
   markResourceViewed,
   updateResourceVideoProgress,
+  getInstructorCourseStudentsProgress,
 };
