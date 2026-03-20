@@ -1,7 +1,16 @@
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
+const { buildEnrollmentProgressSnapshot } = require('../src/utils/progress.utils');
 
 const prisma = new PrismaClient();
+
+const SAMPLE_PDF_URL =
+  'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf';
+const SAMPLE_VIDEO_URLS = [
+  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
+];
 
 const sampleQuestions10 = [
   {
@@ -194,6 +203,173 @@ async function createQuizWithQuestions(lessonId, title, timeLimitMinutes, passin
   }
 
   return quiz;
+}
+
+async function markContentViewed(enrollmentId, lessonId, viewedAt = new Date()) {
+  return prisma.learningProgress.upsert({
+    where: {
+      enrollmentId_lessonId: { enrollmentId, lessonId },
+    },
+    update: {
+      status: 'in_progress',
+      contentViewedAt: viewedAt,
+    },
+    create: {
+      enrollmentId,
+      lessonId,
+      status: 'in_progress',
+      contentViewedAt: viewedAt,
+    },
+  });
+}
+
+async function completePrimaryVideo(enrollmentId, lesson, completedAt = new Date()) {
+  return prisma.learningProgress.upsert({
+    where: {
+      enrollmentId_lessonId: { enrollmentId, lessonId: lesson.lessonId },
+    },
+    update: {
+      status: 'in_progress',
+      lastWatchedSecond: lesson.durationSeconds || 0,
+      videoCompletedAt: completedAt,
+    },
+    create: {
+      enrollmentId,
+      lessonId: lesson.lessonId,
+      status: 'in_progress',
+      lastWatchedSecond: lesson.durationSeconds || 0,
+      videoCompletedAt: completedAt,
+    },
+  });
+}
+
+async function completeLessonResource(enrollmentId, resourceId, completedAt = new Date()) {
+  return prisma.lessonResourceProgress.upsert({
+    where: {
+      enrollmentId_resourceId: { enrollmentId, resourceId },
+    },
+    update: {
+      status: 'completed',
+      viewedAt: completedAt,
+      completedAt,
+    },
+    create: {
+      enrollmentId,
+      resourceId,
+      status: 'completed',
+      viewedAt: completedAt,
+      completedAt,
+    },
+  });
+}
+
+async function seedQuizAttempt(enrollmentId, quizId, totalScore, completedAt = new Date()) {
+  // Only used by seed to mark quiz lesson as completed/in-progress in progress snapshot.
+  return prisma.quizAttempt.create({
+    data: {
+      enrollmentId,
+      quizId,
+      totalScore,
+      startedAt: new Date(),
+      completedAt,
+    },
+  });
+}
+
+async function seedAssignmentSubmission(enrollmentId, assignmentId, { submittedAt = new Date(), grade = null, feedback = null } = {}) {
+  // Only used by seed to mark assignment lesson as completed in progress snapshot.
+  return prisma.assignmentSubmission.create({
+    data: {
+      enrollmentId,
+      assignmentId,
+      submittedAt,
+      grade,
+      feedback,
+    },
+  });
+}
+
+async function refreshEnrollmentPercentFromSnapshot(enrollmentId, courseId) {
+  const enrollment = await prisma.enrollment.findUnique({
+    where: { enrollmentId },
+    include: { learningProgress: true },
+  });
+  const course = await prisma.course.findUnique({
+    where: { courseId },
+    include: {
+      modules: {
+        orderBy: { orderIndex: 'asc' },
+        include: {
+          lessons: {
+            orderBy: { orderIndex: 'asc' },
+            include: {
+              lessonResources: true,
+              quizzes: { select: { quizId: true, title: true, passingScore: true } },
+              assignments: {
+                select: { assignmentId: true, title: true, instructions: true },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!enrollment || !course) return;
+
+  const lessonIds = course.modules.flatMap((m) => m.lessons.map((l) => l.lessonId));
+  const resourceIds = course.modules.flatMap((m) =>
+    m.lessons.flatMap((l) => l.lessonResources.map((r) => r.resourceId)),
+  );
+  const quizIds = course.modules.flatMap((m) =>
+    m.lessons.flatMap((l) => l.quizzes.map((q) => q.quizId)),
+  );
+  const assignmentIds = course.modules.flatMap((m) =>
+    m.lessons.flatMap((l) => l.assignments.map((a) => a.assignmentId)),
+  );
+
+  const [learningProgressRecords, resourceProgressRecords, quizAttempts, assignmentSubmissions] =
+    await Promise.all([
+      prisma.learningProgress.findMany({
+        where: {
+          enrollmentId,
+          lessonId: { in: lessonIds.length > 0 ? lessonIds : [-1] },
+        },
+      }),
+      prisma.lessonResourceProgress.findMany({
+        where: {
+          enrollmentId,
+          resourceId: { in: resourceIds.length > 0 ? resourceIds : [-1] },
+        },
+      }),
+      prisma.quizAttempt.findMany({
+        where: {
+          enrollmentId,
+          quizId: { in: quizIds.length > 0 ? quizIds : [-1] },
+        },
+        orderBy: { completedAt: 'desc' },
+      }),
+      prisma.assignmentSubmission.findMany({
+        where: {
+          enrollmentId,
+          assignmentId: { in: assignmentIds.length > 0 ? assignmentIds : [-1] },
+        },
+        orderBy: { submittedAt: 'desc' },
+      }),
+    ]);
+
+  const snapshot = buildEnrollmentProgressSnapshot({
+    enrollment,
+    course,
+    learningProgressRecords,
+    resourceProgressRecords,
+    quizAttempts,
+    assignmentSubmissions,
+  });
+
+  await prisma.enrollment.update({
+    where: { enrollmentId },
+    data: { progressPercent: snapshot.percentage },
+  });
 }
 
 async function main() {
@@ -435,7 +611,20 @@ async function main() {
             orderIndex: 0,
             lessons: {
               create: [
-                { title: 'IELTS Listening Fundamentals', type: 'video', orderIndex: 1, contentText: 'Learn the structure and strategies for IELTS Listening test.' },
+                {
+                  title: 'IELTS Listening Fundamentals',
+                  type: 'video',
+                  orderIndex: 1,
+                  mediaUrl: SAMPLE_VIDEO_URLS[0],
+                  durationSeconds: 596,
+                  contentText: 'Learn the structure and strategies for IELTS Listening test.',
+                  lessonResources: {
+                    create: [
+                      { title: 'Listening handout (PDF)', fileUrl: SAMPLE_PDF_URL, fileType: 'pdf' },
+                      { title: 'Supplementary listening clip', fileUrl: SAMPLE_VIDEO_URLS[1], fileType: 'video' },
+                    ],
+                  },
+                },
                 { title: 'Practice Test 1', type: 'quiz', orderIndex: 2, contentText: 'Complete a full IELTS Listening practice test.' },
               ],
             },
@@ -446,7 +635,17 @@ async function main() {
             orderIndex: 1,
             lessons: {
               create: [
-                { title: 'IELTS Reading Strategies', type: 'video', orderIndex: 1, contentText: 'Learn how to read efficiently and answer questions accurately.' },
+                {
+                  title: 'IELTS Reading Strategies',
+                  type: 'video',
+                  orderIndex: 1,
+                  mediaUrl: SAMPLE_VIDEO_URLS[2],
+                  durationSeconds: 887,
+                  contentText: 'Learn how to read efficiently and answer questions accurately.',
+                  lessonResources: {
+                    create: [{ title: 'Reading skills checklist', fileUrl: SAMPLE_PDF_URL, fileType: 'pdf' }],
+                  },
+                },
                 { title: 'Practice Test 2', type: 'quiz', orderIndex: 2, contentText: 'Complete a full IELTS Reading practice test.' },
               ],
             },
@@ -595,25 +794,208 @@ async function main() {
 
   console.log('\n📖 Creating enrollments...');
 
-  await prisma.enrollment.create({
-    data: {
-      userId: student1.userId,
-      courseId: freeCourse1.courseId,
-      status: 'active',
+  // Ensure assignment records exist for assignment-type lessons (required by progress snapshot).
+  console.log('\n📎 Ensuring IELTS assignments exist...');
+  const ieltsCourseFullForAssignments = await prisma.course.findUnique({
+    where: { courseId: paidCourse1.courseId },
+    include: {
+      modules: {
+        orderBy: { orderIndex: 'asc' },
+        include: {
+          lessons: {
+            orderBy: { orderIndex: 'asc' },
+            include: { lessonResources: true },
+          },
+        },
+      },
     },
   });
-  console.log('  ✅ Student 1 enrolled in:', freeCourse1.title);
 
-  await prisma.enrollment.create({
-    data: {
-      userId: student2.userId,
-      courseId: freeCourse2.courseId,
-      status: 'active',
+  if (ieltsCourseFullForAssignments) {
+    const allIeltsLessons = ieltsCourseFullForAssignments.modules.flatMap((m) => m.lessons);
+
+    const writingLesson = allIeltsLessons.find((l) => l.title === 'Writing Practice');
+    if (writingLesson) {
+      const hasAsg = await prisma.assignment.findUnique({
+        where: { lessonId: writingLesson.lessonId },
+      });
+      if (!hasAsg) {
+        await prisma.assignment.create({
+          data: {
+            lessonId: writingLesson.lessonId,
+            title: 'IELTS Writing submission',
+            instructions: 'Submit Task 1 and Task 2 as described in the lesson.',
+          },
+        });
+        console.log('  ✅ Assignment on Writing Practice');
+      }
+    }
+  }
+
+  // Cross enroll: each student enrolls in ~3 courses (paid-biased) to give FE enough data.
+  console.log('\n🧩 Creating enrollments & seeding progress (cross enroll)...');
+
+  const enrollmentPlan = [
+    {
+      student: student1,
+      items: [
+        { course: paidCourse2, mode: 'completed' },
+        { course: paidCourse3, mode: 'partial' },
+        { course: freeCourse1, mode: 'new' },
+      ],
     },
-  });
-  console.log('  ✅ Student 2 enrolled in:', freeCourse2.title);
+    {
+      student: student2,
+      items: [
+        { course: paidCourse3, mode: 'completed' },
+        { course: paidCourse2, mode: 'partial' },
+        { course: freeCourse2, mode: 'new' },
+      ],
+    },
+    {
+      student: student3,
+      items: [
+        { course: paidCourse2, mode: 'partial' },
+        { course: paidCourse3, mode: 'completed' },
+        { course: freeCourse1, mode: 'new' },
+      ],
+    },
+  ];
+
+  const createdEnrollments = [];
+  for (const group of enrollmentPlan) {
+    for (const item of group.items) {
+      const enrollment = await prisma.enrollment.create({
+        data: {
+          userId: group.student.userId,
+          courseId: item.course.courseId,
+          status: 'active',
+        },
+      });
+      createdEnrollments.push({
+        enrollmentId: enrollment.enrollmentId,
+        courseId: item.course.courseId,
+        mode: item.mode,
+        userId: group.student.userId,
+      });
+      console.log(
+        `  ✅ ${group.student.email} enrolled in: ${item.course.title} (${item.mode})`,
+      );
+    }
+  }
+
+  // Load course details for seeding progress snapshot.
+  const uniqueCourseIds = [...new Set(createdEnrollments.map((e) => e.courseId))];
+  const courseDetailsById = {};
+  for (const courseId of uniqueCourseIds) {
+    const courseFull = await prisma.course.findUnique({
+      where: { courseId },
+      include: {
+        modules: {
+          orderBy: { orderIndex: 'asc' },
+          include: {
+            lessons: {
+              orderBy: { orderIndex: 'asc' },
+              include: {
+                lessonResources: true,
+                quizzes: true,
+                assignments: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    if (courseFull) courseDetailsById[courseId] = courseFull;
+  }
+
+  async function seedProgressForEnrollment({ enrollmentId, courseId, mode }) {
+    const courseFull = courseDetailsById[courseId];
+    if (!courseFull) return;
+
+    const lessons = courseFull.modules.flatMap((m) => m.lessons || []);
+    const seededNow = new Date();
+
+    if (mode === 'completed') {
+      for (const lesson of lessons) {
+        if ((lesson.contentText || '').trim()) {
+          await markContentViewed(enrollmentId, lesson.lessonId, seededNow);
+        }
+
+        if (lesson.mediaUrl) {
+          await completePrimaryVideo(enrollmentId, lesson, seededNow);
+        }
+
+        for (const r of lesson.lessonResources || []) {
+          await completeLessonResource(enrollmentId, r.resourceId, seededNow);
+        }
+
+        const quiz = (lesson.quizzes || [])[0];
+        if (quiz) {
+          const passingScore = Number(quiz.passingScore || 0);
+          await seedQuizAttempt(enrollmentId, quiz.quizId, passingScore + 10, seededNow);
+        }
+
+        const assignment = (lesson.assignments || [])[0];
+        if (assignment) {
+          await seedAssignmentSubmission(enrollmentId, assignment.assignmentId, {
+            submittedAt: seededNow,
+            grade: 8.5,
+          });
+        }
+      }
+      return;
+    }
+
+    if (mode === 'partial') {
+      const seedCount = Math.max(1, Math.ceil(lessons.length * 0.6));
+      for (let i = 0; i < Math.min(seedCount, lessons.length); i++) {
+        const lesson = lessons[i];
+
+        if ((lesson.contentText || '').trim()) {
+          // Partial: only content/view state for quiz/assignment lessons (no quizAttempt/assignmentSubmission).
+          await markContentViewed(enrollmentId, lesson.lessonId, seededNow);
+        }
+
+        const resources = lesson.lessonResources || [];
+        const hasResources = resources.length > 0;
+
+        if (lesson.mediaUrl && hasResources) {
+          // Partial: complete primary video and only some resources (e.g., 1 out of N).
+          await completePrimaryVideo(enrollmentId, lesson, seededNow);
+          const toComplete = resources.slice(0, 1);
+          for (const r of toComplete) {
+            await completeLessonResource(enrollmentId, r.resourceId, seededNow);
+          }
+        }
+        if (lesson.mediaUrl && !hasResources) {
+          // Partial variety: complete video for some video lessons to generate non-zero progressPercent.
+          if (i % 2 === 0) {
+            await completePrimaryVideo(enrollmentId, lesson, seededNow);
+          }
+        }
+      }
+      return;
+    }
+
+    // mode === 'new'
+  }
+
+  for (const e of createdEnrollments) {
+    await seedProgressForEnrollment(e);
+  }
+
+  // Sync Enrollment.progressPercent from snapshot for all newly-created enrollments.
+  for (const e of createdEnrollments) {
+    await refreshEnrollmentPercentFromSnapshot(e.enrollmentId, e.courseId);
+  }
+
+  console.log('\n✅ Progress seeded for all cross enrollments.\n');
 
   console.log('\n✨ Seeding completed!\n');
+  console.log(
+    `💡 IELTS test URL (student@example.com): /student/courses/${paidCourse1.courseId}/learn`,
+  );
   console.log('📝 Test Accounts:');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('Admin: admin@example.com / password123');
