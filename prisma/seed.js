@@ -509,6 +509,69 @@ async function main() {
     },
   });
   console.log('  ✅ Student 3:', student3.email);
+
+  const instructorBlueprints = [
+    { email: 'instructor3@example.com', fullName: 'Lâm Minh Đức', currentLevel: 'C1' },
+    { email: 'instructor4@example.com', fullName: 'Đỗ Quỳnh Anh', currentLevel: 'C2' },
+    { email: 'instructor5@example.com', fullName: 'Phan Gia Bảo', currentLevel: 'C1' },
+    { email: 'instructor6@example.com', fullName: 'Trịnh Bảo Châu', currentLevel: 'B2' },
+    { email: 'instructor7@example.com', fullName: 'Vũ Quang Huy', currentLevel: 'C1' },
+  ];
+  const createdExtraInstructors = [];
+  for (const item of instructorBlueprints) {
+    const instructor = await prisma.user.upsert({
+      where: { email: item.email },
+      update: {},
+      create: {
+        email: item.email,
+        passwordHash: hashedPassword,
+        fullName: item.fullName,
+        currentLevel: item.currentLevel,
+        userRoles: { create: { roleId: instructorRole.roleId } },
+      },
+    });
+    createdExtraInstructors.push(instructor);
+    console.log('  ✅ Extra instructor:', instructor.email);
+  }
+
+  const studentBlueprints = [
+    { email: 'student4@example.com', fullName: 'Nguyễn Quốc An', currentLevel: 'A2' },
+    { email: 'student5@example.com', fullName: 'Trần Mỹ Linh', currentLevel: 'B1' },
+    { email: 'student6@example.com', fullName: 'Bùi Hoàng Phúc', currentLevel: 'B2' },
+    { email: 'student7@example.com', fullName: 'Võ Thảo Nhi', currentLevel: 'A1' },
+    { email: 'student8@example.com', fullName: 'Đặng Minh Khoa', currentLevel: 'B1' },
+    { email: 'student9@example.com', fullName: 'Phạm Gia Hân', currentLevel: 'A2' },
+    { email: 'student10@example.com', fullName: 'Lý Thành Nam', currentLevel: 'B2' },
+    { email: 'student11@example.com', fullName: 'Ngô Thảo Vy', currentLevel: 'A1' },
+    { email: 'student12@example.com', fullName: 'Đinh Hải Long', currentLevel: 'B1' },
+    { email: 'student13@example.com', fullName: 'Tạ Minh Trí', currentLevel: 'B2' },
+    { email: 'student14@example.com', fullName: 'Trương Nhật Lan', currentLevel: 'A2' },
+    { email: 'student15@example.com', fullName: 'Lương Gia Huy', currentLevel: 'B1' },
+    { email: 'student16@example.com', fullName: 'Mai Hà Phương', currentLevel: 'A2' },
+    { email: 'student17@example.com', fullName: 'Phùng Đức Minh', currentLevel: 'B2' },
+    { email: 'student18@example.com', fullName: 'Hoàng Bảo Ngọc', currentLevel: 'A1' },
+    { email: 'student19@example.com', fullName: 'Châu Anh Khoa', currentLevel: 'B1' },
+    { email: 'student20@example.com', fullName: 'Đỗ Thùy Dương', currentLevel: 'B2' },
+    { email: 'student21@example.com', fullName: 'Vương Thành Tín', currentLevel: 'A2' },
+    { email: 'student22@example.com', fullName: 'Lê Gia Bảo', currentLevel: 'B1' },
+    { email: 'student23@example.com', fullName: 'Hà Minh Quân', currentLevel: 'A2' },
+  ];
+  const createdExtraStudents = [];
+  for (const item of studentBlueprints) {
+    const student = await prisma.user.upsert({
+      where: { email: item.email },
+      update: {},
+      create: {
+        email: item.email,
+        passwordHash: hashedPassword,
+        fullName: item.fullName,
+        currentLevel: item.currentLevel,
+        userRoles: { create: { roleId: studentRole.roleId } },
+      },
+    });
+    createdExtraStudents.push(student);
+    console.log('  ✅ Extra student:', student.email);
+  }
   console.log('');
 
   console.log('📚 Creating FREE courses...');
@@ -743,6 +806,249 @@ async function main() {
     },
   });
   console.log('  ✅ PAID Course 3:', paidCourse3.title, `(${paidCourse3.price.toLocaleString('vi-VN')} VND)`);
+
+  const instructorPool = [lecturer1, lecturer2, ...createdExtraInstructors];
+  const extraCourseBlueprints = [
+    {
+      title: 'Public Speaking Fundamentals',
+      description: 'Build confidence and structure for public presentations.',
+      price: 0,
+      category: 'Communication',
+      levelTarget: 'A2',
+      modules: [
+        {
+          title: 'Module 1: Speaking Basics',
+          lessons: [
+            { title: 'Voice and Pronunciation', type: 'video', contentText: 'Control pace, tone, and clarity.' },
+            { title: 'Body Language Essentials', type: 'video', contentText: 'Use gesture and posture effectively.' },
+          ],
+        },
+      ],
+    },
+    {
+      title: 'English for Customer Support',
+      description: 'Practical English for customer-facing conversations.',
+      price: 200000,
+      category: 'Business',
+      levelTarget: 'B1',
+      modules: [
+        {
+          title: 'Module 1: Call Handling',
+          lessons: [
+            { title: 'Greeting and Verification', type: 'video', contentText: 'Open calls professionally.' },
+            { title: 'Handling Complaints', type: 'video', contentText: 'De-escalation and empathy scripts.' },
+          ],
+        },
+        {
+          title: 'Module 2: Email Follow-up',
+          lessons: [
+            { title: 'Support Email Templates', type: 'video', contentText: 'Write concise support emails.' },
+            { title: 'Case Summary Assignment', type: 'assignment', contentText: 'Submit a sample case summary.' },
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Academic Writing Essentials',
+      description: 'Develop formal writing for academic contexts.',
+      price: 250000,
+      category: 'Communication',
+      levelTarget: 'B2',
+      modules: [
+        {
+          title: 'Module 1: Essay Structure',
+          lessons: [
+            { title: 'Introduction and Thesis', type: 'video', contentText: 'Craft strong thesis statements.' },
+            { title: 'Body Paragraph Logic', type: 'video', contentText: 'Build coherent argument flow.' },
+          ],
+        },
+      ],
+    },
+    {
+      title: 'English Interview Preparation',
+      description: 'Prepare for common interview scenarios in English.',
+      price: 300000,
+      category: 'Business',
+      levelTarget: 'B1',
+      modules: [
+        {
+          title: 'Module 1: Interview Core',
+          lessons: [
+            { title: 'Tell Me About Yourself', type: 'video', contentText: 'Structure concise self-introductions.' },
+            { title: 'Behavioral Questions', type: 'video', contentText: 'Use STAR technique in English.' },
+          ],
+        },
+      ],
+    },
+    {
+      title: 'TOEFL Reading and Writing',
+      description: 'Integrated TOEFL preparation for reading and writing sections.',
+      price: 350000,
+      category: 'IELTS',
+      levelTarget: 'B2',
+      modules: [
+        {
+          title: 'Module 1: Reading Skills',
+          lessons: [
+            { title: 'Skimming and Scanning', type: 'video', contentText: 'Improve reading speed and accuracy.' },
+            { title: 'Inference Questions', type: 'quiz', contentText: 'Practice inference and purpose questions.' },
+          ],
+        },
+        {
+          title: 'Module 2: Writing Response',
+          lessons: [
+            { title: 'Integrated Writing Task', type: 'assignment', contentText: 'Submit one integrated writing response.' },
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Presentation Slide Writing',
+      description: 'Create clear and persuasive English presentation slides.',
+      price: 180000,
+      category: 'Business',
+      levelTarget: 'B1',
+      modules: [
+        {
+          title: 'Module 1: Slide Structure',
+          lessons: [
+            { title: 'Headline and Message', type: 'video', contentText: 'Write concise slide headlines.' },
+            { title: 'Slide Deck Assignment', type: 'assignment', contentText: 'Submit a 5-slide outline.' },
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Grammar for Workplace Writing',
+      description: 'Target common grammar mistakes in professional writing.',
+      price: 0,
+      category: 'Grammar',
+      levelTarget: 'A2',
+      modules: [
+        {
+          title: 'Module 1: Core Grammar',
+          lessons: [
+            { title: 'Sentence Consistency', type: 'video', contentText: 'Keep tense and subject agreement consistent.' },
+            { title: 'Proofreading Quiz', type: 'quiz', contentText: 'Identify grammar errors in context.' },
+          ],
+        },
+      ],
+    },
+    {
+      title: 'English Negotiation Basics',
+      description: 'Learn practical language for negotiation meetings.',
+      price: 280000,
+      category: 'Business',
+      levelTarget: 'B2',
+      modules: [
+        {
+          title: 'Module 1: Negotiation Language',
+          lessons: [
+            { title: 'Opening and Positioning', type: 'video', contentText: 'Set targets and open discussions.' },
+            { title: 'Counteroffer Practice', type: 'assignment', contentText: 'Submit a written counteroffer response.' },
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Email Writing for Teams',
+      description: 'Write clearer internal and external team communication.',
+      price: 150000,
+      category: 'Communication',
+      levelTarget: 'A2',
+      modules: [
+        {
+          title: 'Module 1: Internal Communication',
+          lessons: [
+            { title: 'Status Update Emails', type: 'video', contentText: 'Write concise status updates.' },
+            { title: 'Follow-up Assignment', type: 'assignment', contentText: 'Submit one follow-up email draft.' },
+          ],
+        },
+      ],
+    },
+    {
+      title: 'TOEIC Intensive Mock Tests',
+      description: 'Practice full-length TOEIC-style sections.',
+      price: 320000,
+      category: 'TOEIC',
+      levelTarget: 'B2',
+      modules: [
+        {
+          title: 'Module 1: Timed Practice',
+          lessons: [
+            { title: 'Listening Speed Drill', type: 'video', contentText: 'Train under timed conditions.' },
+            { title: 'Mock Test Quiz', type: 'quiz', contentText: 'Complete a mini mock test.' },
+          ],
+        },
+      ],
+    },
+    {
+      title: 'English Writing Clinic',
+      description: 'Focused practice for sentence and paragraph quality.',
+      price: 220000,
+      category: 'Communication',
+      levelTarget: 'B1',
+      modules: [
+        {
+          title: 'Module 1: Clarity and Coherence',
+          lessons: [
+            { title: 'Paragraph Coherence', type: 'video', contentText: 'Link ideas smoothly.' },
+            { title: 'Rewrite Assignment', type: 'assignment', contentText: 'Rewrite a weak paragraph into a strong one.' },
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Cross-cultural Communication',
+      description: 'Improve communication across international teams.',
+      price: 0,
+      category: 'Communication',
+      levelTarget: 'A2',
+      modules: [
+        {
+          title: 'Module 1: Communication Context',
+          lessons: [
+            { title: 'Tone and Politeness', type: 'video', contentText: 'Adapt tone for audience and culture.' },
+            { title: 'Scenario Assignment', type: 'assignment', contentText: 'Respond to a cross-cultural scenario.' },
+          ],
+        },
+      ],
+    },
+  ];
+
+  const createdExtraCourses = [];
+  for (let i = 0; i < extraCourseBlueprints.length; i++) {
+    const bp = extraCourseBlueprints[i];
+    const instructor = instructorPool[i % instructorPool.length];
+    const course = await prisma.course.create({
+      data: {
+        title: bp.title,
+        description: bp.description,
+        price: bp.price,
+        instructorId: instructor.userId,
+        category: bp.category,
+        levelTarget: bp.levelTarget,
+        status: 'published',
+        modules: {
+          create: bp.modules.map((m, moduleIdx) => ({
+            title: m.title,
+            description: `${m.title} overview`,
+            orderIndex: moduleIdx,
+            lessons: {
+              create: m.lessons.map((l, lessonIdx) => ({
+                title: l.title,
+                type: l.type,
+                orderIndex: lessonIdx + 1,
+                contentText: l.contentText,
+              })),
+            },
+          })),
+        },
+      },
+    });
+    createdExtraCourses.push(course);
+    console.log(`  ✅ EXTRA Course ${i + 1}:`, course.title, `(${course.price.toLocaleString('vi-VN')} VND)`);
+  }
   console.log('');
 
   console.log('📝 Creating quizzes...');
@@ -794,42 +1100,40 @@ async function main() {
 
   console.log('\n📖 Creating enrollments...');
 
-  // Ensure assignment records exist for assignment-type lessons (required by progress snapshot).
-  console.log('\n📎 Ensuring IELTS assignments exist...');
-  const ieltsCourseFullForAssignments = await prisma.course.findUnique({
-    where: { courseId: paidCourse1.courseId },
-    include: {
-      modules: {
-        orderBy: { orderIndex: 'asc' },
-        include: {
-          lessons: {
-            orderBy: { orderIndex: 'asc' },
-            include: { lessonResources: true },
-          },
+  // Ensure assignment records exist for assignment-type lessons in enrollment pool.
+  console.log('\n📎 Ensuring assignment records exist...');
+  const assignmentCoursePool = [
+    freeCourse1,
+    freeCourse2,
+    paidCourse2,
+    paidCourse3,
+    ...createdExtraCourses,
+  ];
+  const assignmentCourseIds = [...new Set(assignmentCoursePool.map((c) => c.courseId))];
+  const assignmentLessons = await prisma.lesson.findMany({
+    where: {
+      type: 'assignment',
+      module: {
+        courseId: {
+          in: assignmentCourseIds,
         },
       },
     },
+    include: {
+      module: { include: { course: true } },
+      assignments: true,
+    },
   });
-
-  if (ieltsCourseFullForAssignments) {
-    const allIeltsLessons = ieltsCourseFullForAssignments.modules.flatMap((m) => m.lessons);
-
-    const writingLesson = allIeltsLessons.find((l) => l.title === 'Writing Practice');
-    if (writingLesson) {
-      const hasAsg = await prisma.assignment.findUnique({
-        where: { lessonId: writingLesson.lessonId },
-      });
-      if (!hasAsg) {
-        await prisma.assignment.create({
-          data: {
-            lessonId: writingLesson.lessonId,
-            title: 'IELTS Writing submission',
-            instructions: 'Submit Task 1 and Task 2 as described in the lesson.',
-          },
-        });
-        console.log('  ✅ Assignment on Writing Practice');
-      }
-    }
+  for (const lesson of assignmentLessons) {
+    if ((lesson.assignments || []).length > 0) continue;
+    await prisma.assignment.create({
+      data: {
+        lessonId: lesson.lessonId,
+        title: `${lesson.title} Submission`,
+        instructions: lesson.contentText || `Submit your work for ${lesson.title}.`,
+      },
+    });
+    console.log(`  ✅ Assignment created: ${lesson.title} (${lesson.module.course.title})`);
   }
 
   // Cross enroll: each student enrolls in ~3 courses (paid-biased) to give FE enough data.
@@ -862,22 +1166,77 @@ async function main() {
     },
   ];
 
+  const allStudents = [student1, student2, student3, ...createdExtraStudents];
+  const enrollmentCoursePool = [
+    freeCourse1,
+    freeCourse2,
+    paidCourse2,
+    paidCourse3,
+    ...createdExtraCourses,
+  ];
+  const modes = ['completed', 'partial', 'new'];
+
+  // Add many more enrollments with mixed progress for extra students.
+  for (let idx = 0; idx < allStudents.length; idx++) {
+    const learner = allStudents[idx];
+    const planned = [];
+    const start = (idx * 2) % enrollmentCoursePool.length;
+    const count = 4 + (idx % 3); // 4-6 courses per student
+    for (let c = 0; c < count; c++) {
+      const course = enrollmentCoursePool[(start + c) % enrollmentCoursePool.length];
+      if (!planned.some((p) => p.course.courseId === course.courseId)) {
+        planned.push({ course, mode: modes[(idx + c) % modes.length] });
+      }
+    }
+    enrollmentPlan.push({ student: learner, items: planned });
+  }
+
+  // Deduplicate student-course pairs if they were already defined above.
+  const dedupEnrollmentPlan = enrollmentPlan.map((group) => {
+    const seen = new Set();
+    const items = group.items.filter((item) => {
+      const key = `${group.student.userId}_${item.course.courseId}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return { ...group, items };
+  });
+
   const createdEnrollments = [];
-  for (const group of enrollmentPlan) {
+  for (const group of dedupEnrollmentPlan) {
     for (const item of group.items) {
-      const enrollment = await prisma.enrollment.create({
-        data: {
+      const enrollment = await prisma.enrollment.upsert({
+        where: {
+          userId_courseId: {
+            userId: group.student.userId,
+            courseId: item.course.courseId,
+          },
+        },
+        update: {
+          status: 'active',
+          progressPercent: 0,
+          orderId: null,
+          expiryDate: null,
+        },
+        create: {
           userId: group.student.userId,
           courseId: item.course.courseId,
           status: 'active',
         },
       });
-      createdEnrollments.push({
-        enrollmentId: enrollment.enrollmentId,
-        courseId: item.course.courseId,
-        mode: item.mode,
-        userId: group.student.userId,
-      });
+      if (
+        !createdEnrollments.some(
+          (e) => e.enrollmentId === enrollment.enrollmentId,
+        )
+      ) {
+        createdEnrollments.push({
+          enrollmentId: enrollment.enrollmentId,
+          courseId: item.course.courseId,
+          mode: item.mode,
+          userId: group.student.userId,
+        });
+      }
       console.log(
         `  ✅ ${group.student.email} enrolled in: ${item.course.title} (${item.mode})`,
       );
@@ -941,6 +1300,7 @@ async function main() {
           await seedAssignmentSubmission(enrollmentId, assignment.assignmentId, {
             submittedAt: seededNow,
             grade: 8.5,
+            feedback: 'Well-structured submission. Good work overall.',
           });
         }
       }
@@ -974,6 +1334,16 @@ async function main() {
             await completePrimaryVideo(enrollmentId, lesson, seededNow);
           }
         }
+
+        const assignment = (lesson.assignments || [])[0];
+        if (assignment && i % 2 === 0) {
+          // Partial group keeps pending review state for instructor grading tests.
+          await seedAssignmentSubmission(enrollmentId, assignment.assignmentId, {
+            submittedAt: seededNow,
+            grade: null,
+            feedback: null,
+          });
+        }
       }
       return;
     }
@@ -983,6 +1353,23 @@ async function main() {
 
   for (const e of createdEnrollments) {
     await seedProgressForEnrollment(e);
+  }
+
+  // Ensure pending submissions exist for instructor grading tests.
+  const partialEnrollments = createdEnrollments.filter((e) => e.mode === 'partial').slice(0, 30);
+  for (const e of partialEnrollments) {
+    const courseFull = courseDetailsById[e.courseId];
+    if (!courseFull) continue;
+    const assignmentIds = courseFull.modules.flatMap((m) =>
+      (m.lessons || []).flatMap((l) => (l.assignments || []).map((a) => a.assignmentId)),
+    );
+    if (assignmentIds.length === 0) continue;
+    const assignmentId = assignmentIds[0];
+    await seedAssignmentSubmission(e.enrollmentId, assignmentId, {
+      submittedAt: new Date(),
+      grade: null,
+      feedback: null,
+    });
   }
 
   // Sync Enrollment.progressPercent from snapshot for all newly-created enrollments.
