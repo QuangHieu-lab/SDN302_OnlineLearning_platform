@@ -4,6 +4,20 @@ const {
   ENROLLMENT_STATUS_COMPLETED,
 } = require('../config/constants');
 
+const FLAGGED_COURSE_MESSAGE =
+  'This course is temporarily unavailable because it has been flagged by the admin. Please come back later.';
+
+function isAdminRole(roles = []) {
+  return Array.isArray(roles) && roles.includes('admin');
+}
+
+function getFlaggedCourseError(course, roles = []) {
+  if (course?.contentFlagged && !isAdminRole(roles)) {
+    return { status: 403, message: FLAGGED_COURSE_MESSAGE };
+  }
+  return null;
+}
+
 function parseId(value, name) {
   const n = typeof value === 'string' ? parseInt(value, 10) : value;
   if (Number.isNaN(n)) {
@@ -444,6 +458,9 @@ function sendAccessError(res, err) {
 }
 
 module.exports = {
+  FLAGGED_COURSE_MESSAGE,
+  getFlaggedCourseError,
+  isAdminRole,
   parseId,
   ensureModuleAccess,
   getModuleForInstructor,

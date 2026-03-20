@@ -2,6 +2,7 @@ const prisma = require('../utils/prisma');
 const { getLessonForInstructor, ensureQuizLessonAccess, ensureQuizAccess, getQuizForInstructor, sendAccessError } = require('../utils/access.helpers');
 const { DEFAULT_PASSING_SCORE, DEFAULT_TIME_LIMIT_MINUTES } = require('../config/constants');
 const { scoreQuizSubmission, buildQuestionResultsFromAttempt } = require('../utils/quiz.utils');
+const { syncLessonProgressState } = require('./progress.controller');
 
 const createQuiz = async (req, res) => {
   try {
@@ -271,6 +272,20 @@ const submitQuiz = async (req, res) => {
       },
     });
 
+    let syncedProgress = null;
+    let certificate = null;
+    try {
+      const syncResult = await syncLessonProgressState({
+        enrollment,
+        lessonId: quiz.lessonId,
+        userId: userIdNum,
+      });
+      syncedProgress = syncResult.snapshot;
+      certificate = syncResult.certificate;
+    } catch (syncError) {
+      console.error('Sync quiz progress error:', syncError);
+    }
+
     res.status(201).json({
       attempt,
       score,
@@ -278,6 +293,9 @@ const submitQuiz = async (req, res) => {
       correctCount,
       passed: score >= quiz.passingScore,
       questionResults,
+      courseProgress: syncedProgress,
+      certificateEarned: !!certificate,
+      certificateData: certificate,
     });
   } catch (error) {
     console.error('Submit quiz error:', error);

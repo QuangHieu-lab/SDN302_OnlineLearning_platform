@@ -1,8 +1,4 @@
--- AlterTable
-ALTER TABLE `courses` ADD COLUMN `content_flagged` BOOLEAN NOT NULL DEFAULT false,
-    ADD COLUMN `content_flagged_at` DATETIME(3) NULL,
-    ADD COLUMN `content_flagged_by` INTEGER NULL,
-    ADD COLUMN `content_flagged_reason` TEXT NULL;
-
--- AddForeignKey
-ALTER TABLE `courses` ADD CONSTRAINT `courses_content_flagged_by_fkey` FOREIGN KEY (`content_flagged_by`) REFERENCES `users`(`user_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+-- Duplicate of 20260303000000_add_course_content_flagged: same ALTER TABLE was applied twice.
+-- Shadow DB replays all migrations in order; the second ADD COLUMN caused MySQL 1060 (duplicate column).
+-- No schema changes here — content_flagged* columns and FK already exist from the earlier migration.
+SELECT 1;
